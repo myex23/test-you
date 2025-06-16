@@ -1,171 +1,143 @@
 import os
 import sys
 import random
-import logging
 import textwrap
+import logging
 from pathlib import Path
+from gtts import gTTS
 from PIL import Image, ImageDraw, ImageFont
-import ffmpeg
+import subprocess
 
-# === CONFIGURATION ===
+# ========== CONFIGURATION ==========
 NUM_VIDEOS = 5  # Number of videos to generate
-VIDEO_DURATION = 10  # seconds per video
-RESOLUTION = (1080, 1920)  # Vertical video resolution
 
-# Directories
 QUOTES_FILE = "quotes.txt"
-ASSET_VIDEO_DIR = Path("assets/videos")
-ASSET_MUSIC_DIR = Path("assets/music")
+VIDEO_DIR = Path("assets/videos")
 OUTPUT_DIR = Path("output")
-OVERLAY_DIR = Path("temp_overlays")
+TTS_AUDIO_DIR = Path("temp_audio")
 
-# Text settings for overlay
-FONT_SIZE = 80
-FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"  # Adjust this path if needed.
-WRAP_WIDTH = 28  # Maximum characters per line
+VIDEO_DURATION = 10  # seconds
+RESOLUTION = (1080, 1920)  # 9:16 vertical
+FONT_SIZE = 72
+FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"  # Change if needed
+WRAP_WIDTH = 28
 
-# === LOGGING SETUP ===
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
 def ensure_directories():
-    for directory in [ASSET_VIDEO_DIR, ASSET_MUSIC_DIR, OUTPUT_DIR, OVERLAY_DIR]:
-        directory.mkdir(parents=True, exist_ok=True)
+    for d in [VIDEO_DIR, OUTPUT_DIR, TTS_AUDIO_DIR]:
+        d.mkdir(parents=True, exist_ok=True)
 
-def load_quotes(file_path: str):
-    try:
-        with open(file_path, "r", encoding="utf-8") as f:
-            return [line.strip() for line in f if line.strip()]
-    except Exception as e:
-        logging.error(f"Error loading quotes: {e}")
-        sys.exit(1)
+def read_quotes():
+    with open(QUOTES_FILE, "r", encoding="utf-8") as f:
+        return [line.strip() for line in f if line.strip()]
 
-def select_random_video() -> Path:
-    videos = list(ASSET_VIDEO_DIR.glob("*.mp4"))
+def select_random_video():
+    videos = list(VIDEO_DIR.glob("*.mp4"))
     if not videos:
-        logging.error(f"No video files found in {ASSET_VIDEO_DIR}")
+        logging.error(f"No videos found in {VIDEO_DIR}")
         sys.exit(1)
     return random.choice(videos)
 
-def select_random_music() -> Path:
-    musics = list(ASSET_MUSIC_DIR.glob("*.mp4"))
-    if not musics:
-        logging.error(f"No music files found in {ASSET_MUSIC_DIR}")
-        sys.exit(1)
-    return random.choice(musics)
+def generate_tts_audio(quote, output_audio_path):
+    tts = gTTS(quote, lang="en", slow=False)
+    tts.save(output_audio_path)
+    logging.info(f"TTS audio saved to {output_audio_path}")
 
-def create_text_overlay(quote: str, overlay_path: Path, video_size=RESOLUTION):
-    """
-    Create a PNG image with a black translucent rectangle and white text.
-    The text is word-wrapped and centered.
-    """
-    img = Image.new("RGBA", video_size, (0, 0, 0, 0))
+def create_text_overlay(quote, overlay_path):
+    # Prepare word-wrapped text
+    wrapped = "\n".join(textwrap.wrap(quote, WRAP_WIDTH))
+    img = Image.new("RGBA", RESOLUTION, (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
-
-    # Wrap text into multiple lines
-    wrapped_text = "\n".join(textwrap.wrap(quote, width=WRAP_WIDTH))
-
     try:
         font = ImageFont.truetype(FONT_PATH, FONT_SIZE)
     except Exception as e:
-        logging.error(f"Error loading font: {e}")
+        logging.warning(f"Could not load font at {FONT_PATH}, using default: {e}")
         font = ImageFont.load_default()
-
     # Calculate text size
-    lines = wrapped_text.split("\n")
-    text_width = 0
-    text_height = 0
-    line_sizes = []
-    for line in lines:
-        size = draw.textsize(line, font=font)
-        line_sizes.append(size)
-        text_width = max(text_width, size[0])
-        text_height += size[1]
-    spacing = FONT_SIZE // 3
-    text_height += spacing * (len(lines) - 1)
-
-    # Draw translucent black rectangle as background
-    padding = 20
-    box_width = text_width + padding * 2
-    box_height = text_height + padding * 2
-    box_x = (video_size[0] - box_width) // 2
-    box_y = (video_size[1] - box_height) // 2
-    draw.rectangle([box_x, box_y, box_x + box_width, box_y + box_height], fill=(0, 0, 0, 180))
-
-    # Draw the wrapped text onto the image
-    current_y = box_y + padding
-    for line in lines:
-        line_width, line_height = draw.textsize(line, font=font)
-        x = (video_size[0] - line_width) // 2
-        draw.text((x, current_y), line, font=font, fill="white")
-        current_y += line_height + spacing
-
+    text_w, text_h = draw.multiline_textsize(wrapped, font=font, spacing=16)
+    # Draw translucent black box behind text
+    box_padding = 40
+    box_w = text_w + box_padding * 2
+    box_h = text_h + box_padding * 2
+    box_x = (RESOLUTION[0] - box_w) // 2
+    box_y = (RESOLUTION[1] - box_h) // 2
+    draw.rectangle([box_x, box_y, box_x + box_w, box_y + box_h], fill=(0, 0, 0, 200))
+    # Draw text centered
+    text_x = (RESOLUTION[0] - text_w) // 2
+    text_y = (RESOLUTION[1] - text_h) // 2
+    draw.multiline_text((text_x, text_y), wrapped, font=font, fill="white", align="center", spacing=16)
     img.save(overlay_path, "PNG")
+    logging.info(f"Overlay image saved to {overlay_path}")
 
-def generate_video(quote: str, output_path: Path, video_path: Path, music_path: Path) -> bool:
-    """
-    Generate a video by extracting a 10-second subclip from a background video,
-    overlaying a text image with the quote, and merging a background audio track.
-    """
+def run_ffmpeg(cmd):
+    logging.info(f"Running ffmpeg: {' '.join(cmd)}")
     try:
-        # Create text overlay image
-        overlay_file = OVERLAY_DIR / "overlay.png"
-        create_text_overlay(quote, overlay_file, video_size=RESOLUTION)
-        
-        # Determine random start time for the video clip if video is longer than duration.
-        # For simplicity, we assume the video duration is large enough. More robust code
-        # might read the video metadata to select a random start.
-        start_time = 0
-        
-        # Build ffmpeg input streams using ffmpeg-python.
-        video_in = ffmpeg.input(str(video_path), ss=start_time, t=VIDEO_DURATION)
-        video_in = video_in.filter('scale', RESOLUTION[0], RESOLUTION[1])
-        overlay_in = ffmpeg.input(str(overlay_file))
-        audio_in = ffmpeg.input(str(music_path), ss=0, t=VIDEO_DURATION)
-        
-        # Overlay the text image on the video clip.
-        # The overlay filter centers the overlay image.
-        video_with_overlay = ffmpeg.overlay(video_in, overlay_in, x='(main_w-overlay_w)/2', y='(main_h-overlay_h)/2')
-        
-        # Combine video and audio, ensuring the output is 10 seconds long.
-        (
-            ffmpeg
-            .output(video_with_overlay, audio_in, str(output_path),
-                    vcodec='libx264', acodec='aac', strict='experimental',
-                    pix_fmt='yuv420p', shortest=None)
-            .overwrite_output()
-            .run(quiet=True)
-        )
-        
-        # Clean up overlay file
-        if overlay_file.exists():
-            overlay_file.unlink()
-    except Exception as e:
-        logging.error(f"Failed to generate video for quote \"{quote[:50]}...\": {e}")
-        return False
-    return True
+        subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+    except subprocess.CalledProcessError as e:
+        logging.error(f"ffmpeg failed: {e}")
+        sys.exit(1)
+
+def generate_video(quote, idx):
+    video_path = select_random_video()
+    tts_audio_path = TTS_AUDIO_DIR / f"tts_{idx}.mp3"
+    overlay_path = TTS_AUDIO_DIR / f"overlay_{idx}.png"
+    output_path = OUTPUT_DIR / f"motivation_{idx + 1}.mp4"
+    # 1. Generate TTS
+    generate_tts_audio(quote, str(tts_audio_path))
+    # 2. Create overlay image
+    create_text_overlay(quote, str(overlay_path))
+    # 3. Extract a 10s vertical segment from source video, overlay text, mix with TTS audio
+    # (a) Extract 10s, resize, mute (temp file)
+    temp_clip = TTS_AUDIO_DIR / f"clip_{idx}.mp4"
+    ffmpeg_extract = [
+        "ffmpeg", "-y",
+        "-ss", "0",
+        "-i", str(video_path),
+        "-t", str(VIDEO_DURATION),
+        "-vf", f"scale={RESOLUTION[0]}:{RESOLUTION[1]}:force_original_aspect_ratio=decrease,pad={RESOLUTION[0]}:{RESOLUTION[1]}:(ow-iw)/2:(oh-ih)/2,setsar=1",
+        "-an",
+        "-c:v", "libx264", "-pix_fmt", "yuv420p",
+        str(temp_clip)
+    ]
+    run_ffmpeg(ffmpeg_extract)
+    # (b) Overlay text
+    temp_overlay = TTS_AUDIO_DIR / f"with_text_{idx}.mp4"
+    ffmpeg_overlay = [
+        "ffmpeg", "-y",
+        "-i", str(temp_clip),
+        "-i", str(overlay_path),
+        "-filter_complex", "overlay=(main_w-overlay_w)/2:(main_h-overlay_h)/2",
+        "-c:a", "copy",
+        "-c:v", "libx264",
+        str(temp_overlay)
+    ]
+    run_ffmpeg(ffmpeg_overlay)
+    # (c) Combine with TTS audio
+    ffmpeg_audio = [
+        "ffmpeg", "-y",
+        "-i", str(temp_overlay),
+        "-i", str(tts_audio_path),
+        "-map", "0:v", "-map", "1:a",
+        "-c:v", "copy", "-c:a", "aac", "-shortest",
+        str(output_path)
+    ]
+    run_ffmpeg(ffmpeg_audio)
+    # Cleanup temp files
+    for f in [temp_clip, overlay_path, temp_overlay, tts_audio_path]:
+        try:
+            os.remove(f)
+        except Exception:
+            pass
+    logging.info(f"Video saved: {output_path}")
 
 def main():
     ensure_directories()
-    quotes = load_quotes(QUOTES_FILE)
-    if not quotes:
-        logging.error("No quotes found in quotes.txt")
-        sys.exit(1)
+    quotes = read_quotes()
     random.shuffle(quotes)
-    
-    num_generated = 0
-    idx = 0
-    while num_generated < NUM_VIDEOS and idx < len(quotes):
-        quote = quotes[idx]
-        video_file = select_random_video()
-        music_file = select_random_music()
-        output_file = OUTPUT_DIR / f"motivation_{num_generated + 1}.mp4"
-        logging.info(f"Generating video {num_generated + 1} for quote: {quote[:50]}...")
-        if generate_video(quote, output_file, video_file, music_file):
-            logging.info(f"Video saved: {output_file}")
-            num_generated += 1
-        else:
-            logging.error("Video generation failed for this quote; skipping.")
-        idx += 1
+    for idx, quote in enumerate(quotes[:NUM_VIDEOS]):
+        logging.info(f"Generating video {idx + 1}/{NUM_VIDEOS}")
+        generate_video(quote, idx)
 
 if __name__ == "__main__":
     main()

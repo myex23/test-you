@@ -1,2 +1,2 @@
-Pillow>=11.0.0
-yt-dlp>=2024.1.1
+gTTS
+Pillow
