@@ -54,34 +54,10 @@ def create_text_overlay(quote, overlay_path):
     except Exception as e:
         logging.warning(f"Could not load font at {FONT_PATH}, using default: {e}")
         font = ImageFont.load_default()
-    # Calculate text size using multiline_textbbox
+    # Calculate text size using multiline_textbbox (Pillow >=8.0.0)
     bbox = draw.multiline_textbbox((0, 0), wrapped, font=font, spacing=16)
     text_w = bbox[2] - bbox[0]
     text_h = bbox[3] - bbox[1]
-    # Draw translucent black box behind text
-    box_padding = 40
-    box_w = text_w + box_padding * 2
-    box_h = text_h + box_padding * 2
-    box_x = (RESOLUTION[0] - box_w) // 2
-    box_y = (RESOLUTION[1] - box_h) // 2
-    draw.rectangle([box_x, box_y, box_x + box_w, box_y + box_h], fill=(0, 0, 0, 200))
-    # Draw text centered
-    text_x = (RESOLUTION[0] - text_w) // 2
-    text_y = (RESOLUTION[1] - text_h) // 2
-    draw.multiline_text((text_x, text_y), wrapped, font=font, fill="white", align="center", spacing=16)
-    img.save(overlay_path, "PNG")
-    logging.info(f"Overlay image saved to {overlay_path}")
-    # Prepare word-wrapped text
-    wrapped = "\n".join(textwrap.wrap(quote, WRAP_WIDTH))
-    img = Image.new("RGBA", RESOLUTION, (0, 0, 0, 0))
-    draw = ImageDraw.Draw(img)
-    try:
-        font = ImageFont.truetype(FONT_PATH, FONT_SIZE)
-    except Exception as e:
-        logging.warning(f"Could not load font at {FONT_PATH}, using default: {e}")
-        font = ImageFont.load_default()
-    # Calculate text size
-    text_w, text_h = draw.multiline_textsize(wrapped, font=font, spacing=16)
     # Draw translucent black box behind text
     box_padding = 40
     box_w = text_w + box_padding * 2
