@@ -40,7 +40,8 @@ def select_random_video():
     return random.choice(videos)
 
 def generate_tts_audio(quote, output_audio_path):
-    tts = gTTS(quote, lang="en", slow=False)
+    # Use UK accent and slow speed for a soothing voice
+    tts = gTTS(quote, lang="en-uk", slow=True)
     tts.save(output_audio_path)
     logging.info(f"TTS audio saved to {output_audio_path}")
 
@@ -73,7 +74,7 @@ def create_text_overlay(quote, overlay_path):
     logging.info(f"Overlay image saved to {overlay_path}")
 
 def run_ffmpeg(cmd):
-    logging.info(f"Running ffmpeg: {' '.join(cmd)}")
+    logging.info(f"Running ffmpeg: {' '.join(str(c) for c in cmd)}")
     try:
         subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
     except subprocess.CalledProcessError as e:
@@ -85,19 +86,18 @@ def generate_video(quote, idx):
     tts_audio_path = TTS_AUDIO_DIR / f"tts_{idx}.mp3"
     overlay_path = TTS_AUDIO_DIR / f"overlay_{idx}.png"
     output_path = OUTPUT_DIR / f"motivation_{idx + 1}.mp4"
-    # 1. Generate TTS
+    # 1. Generate TTS (soothing: UK accent, slow speed)
     generate_tts_audio(quote, str(tts_audio_path))
     # 2. Create overlay image
     create_text_overlay(quote, str(overlay_path))
-    # 3. Extract a 10s vertical segment from source video, overlay text, mix with TTS audio
-    # (a) Extract 10s, resize, mute (temp file)
+    # 3. Extract 10s vertical segment, crop center to 9:16, overlay text, mix TTS audio
     temp_clip = TTS_AUDIO_DIR / f"clip_{idx}.mp4"
     ffmpeg_extract = [
         "ffmpeg", "-y",
         "-ss", "0",
         "-i", str(video_path),
         "-t", str(VIDEO_DURATION),
-        "-vf", f"scale={RESOLUTION[0]}:{RESOLUTION[1]}:force_original_aspect_ratio=decrease,pad={RESOLUTION[0]}:{RESOLUTION[1]}:(ow-iw)/2:(oh-ih)/2,setsar=1",
+        "-vf", "crop='if(gte(iw/ih,9/16),ih*9/16,iw)':'if(gte(iw/ih,9/16),ih,iw*16/9)',scale=1080:1920,setsar=1",
         "-an",
         "-c:v", "libx264", "-pix_fmt", "yuv420p",
         str(temp_clip)
