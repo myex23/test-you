@@ -22,6 +22,21 @@ FONT_SIZE = 72
 FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"  # Change if needed
 WRAP_WIDTH = 28
 
+# Supported voices for gTTS (lang codes)
+GTTS_VOICES = [
+    ("en", "US English"),
+    ("en-uk", "UK English"),
+    ("en-au", "Australian English"),
+    ("en-in", "Indian English"),
+    ("en-za", "South Africa English"),
+    ("en-gh", "Ghana English"),
+    ("en-nz", "New Zealand English"),
+    ("en-ie", "Ireland English"),
+    ("en-ng", "Nigeria English"),
+    ("en-ph", "Philippines English")
+]
+GTTS_SLOWS = [True, False]  # Randomize slow/normal for more variety
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
 def ensure_directories():
@@ -40,10 +55,12 @@ def select_random_video():
     return random.choice(videos)
 
 def generate_tts_audio(quote, output_audio_path):
-    # Use UK accent and slow speed for a soothing voice
-    tts = gTTS(quote, lang="en-uk", slow=True)
+    # Randomly choose a voice/accent and speed for variety
+    lang, lang_desc = random.choice(GTTS_VOICES)
+    slow = random.choice(GTTS_SLOWS)
+    tts = gTTS(quote, lang=lang, slow=slow)
     tts.save(output_audio_path)
-    logging.info(f"TTS audio saved to {output_audio_path}")
+    logging.info(f"TTS ({lang_desc}, slow={slow}) audio saved to {output_audio_path}")
 
 def create_text_overlay(quote, overlay_path):
     # Prepare word-wrapped text
@@ -86,7 +103,7 @@ def generate_video(quote, idx):
     tts_audio_path = TTS_AUDIO_DIR / f"tts_{idx}.mp3"
     overlay_path = TTS_AUDIO_DIR / f"overlay_{idx}.png"
     output_path = OUTPUT_DIR / f"motivation_{idx + 1}.mp4"
-    # 1. Generate TTS (soothing: UK accent, slow speed)
+    # 1. Generate TTS (randomized voice)
     generate_tts_audio(quote, str(tts_audio_path))
     # 2. Create overlay image
     create_text_overlay(quote, str(overlay_path))
@@ -136,6 +153,7 @@ def generate_video(quote, idx):
 def main():
     ensure_directories()
     quotes = read_quotes()
+    print(f"Total quotes found in {QUOTES_FILE}: {len(quotes)}")
     random.shuffle(quotes)
     for idx, quote in enumerate(quotes[:NUM_VIDEOS]):
         logging.info(f"Generating video {idx + 1}/{NUM_VIDEOS}")
