@@ -9,7 +9,7 @@ from PIL import Image, ImageDraw, ImageFont
 import subprocess
 
 # ========== CONFIGURATION ==========
-NUM_VIDEOS = 5  # Number of videos to generate
+NUM_VIDEOS = 300  # Number of videos to generate
 
 QUOTES_FILE = "quotes.txt"
 VIDEO_DIR = Path("assets/videos")
