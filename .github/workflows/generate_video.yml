@@ -3,8 +3,6 @@ name: Generate Motivational Videos
 on:
   push:
     branches: [main]
-  schedule:
-    - cron: '0 2 * * *'
 
 jobs:
   build:
