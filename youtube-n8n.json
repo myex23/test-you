@@ -1,0 +1,133 @@
+{
+  "name": "youtube",
+  "nodes": [
+    {
+      "parameters": {
+        "functionCode": "return Array.from({length: 300}, (_, i) => {\n    const num = i + 1;\n    return {\n        json: {\n            videoName: `motivation_${num}.mp4`,\n            url: `https://github.com/myex23/test-you/raw/refs/heads/main/output/motivation_${num}.mp4`\n        }\n    };\n});"
+      },
+      "name": "Generate URLs",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        120,
+        -160
+      ],
+      "id": "9af03088-d056-423e-8cca-702ae1c6ff23"
+    },
+    {
+      "parameters": {
+        "url": "={{$json[\"url\"]}}",
+        "responseFormat": "file",
+        "options": {}
+      },
+      "name": "Download Video",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        380,
+        -160
+      ],
+      "id": "85cb6981-71c5-4c08-a2bb-5204dfc79608"
+    },
+    {
+      "parameters": {
+        "content": "## Video Upload Workflow\n\nThis workflow automates the process of downloading videos from a GitHub repository and uploading them to YouTube.\n\n1.  **Generate URLs**: Creates a list of video URLs from the GitHub repository.\n2.  **Download Video**: Downloads each video from the generated URLs.\n3.  **Upload to YouTube**: Uploads the downloaded videos to YouTube with a predefined title and tags.\n",
+        "height": 280,
+        "width": 500
+      },
+      "name": "Workflow Explanation",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        840,
+        -380
+      ],
+      "id": "generated-279a4659-df72-4de6-923a-96f1afa66724"
+    },
+    {
+      "parameters": {
+        "resource": "video",
+        "operation": "upload",
+        "title": "Daily 4AM Grind 💪 | #FYP #Motivation #NoExcuses #RiseAndGrind #SelfImprovement",
+        "regionCode": "IN",
+        "categoryId": "1",
+        "binaryProperty": "=data",
+        "options": {
+          "privacyStatus": "private",
+          "publishAt": "={{ \n  (() => {\n    const videosPerDay = 5;\n    const intervalHours = 2;\n\n    // Set your starting hour (3:00 AM UTC)\n    const startHourUTC = 3;\n\n    // Get video number (assumes this is available in item data)\n    const videoNumber = $json.videoNumber || 1;\n\n    // Calculate zero-based index of day and index in that day\n    const dayIndex = Math.floor((videoNumber - 1) / videosPerDay);\n    const indexOfDay = (videoNumber - 1) % videosPerDay;\n\n    // Calculate date of publishing (starting from today)\n    const baseDate = new Date(); // now\n    baseDate.setUTCHours(0, 0, 0, 0); // midnight today\n    baseDate.setUTCDate(baseDate.getUTCDate() + dayIndex); // add days\n\n    // Final publish time\n    baseDate.setUTCHours(startHourUTC + (intervalHours * indexOfDay));\n\n    return baseDate.toISOString();\n  })() \n}}\n"
+        }
+      },
+      "type": "n8n-nodes-base.youTube",
+      "typeVersion": 1,
+      "position": [
+        600,
+        -160
+      ],
+      "id": "7b9ba4c4-947f-41af-896c-758442217466",
+      "name": "YouTube",
+      "credentials": {
+        "youTubeOAuth2Api": {
+          "id": "PShTBy2OiLbU1keY",
+          "name": "YouTube account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -60,
+        -160
+      ],
+      "id": "f61375c4-aa3a-4c00-a054-0c6b9d96958b",
+      "name": "When clicking ‘Execute workflow’"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Generate URLs": {
+      "main": [
+        [
+          {
+            "node": "Download Video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Video": {
+      "main": [
+        [
+          {
+            "node": "YouTube",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Generate URLs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "782fd6dd-228b-4111-bd03-f8b920b2ceb5",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "61ae3d56239ea6dc77400c93a1595a9b406241034f5eee3edff6ea320d495330"
+  },
+  "id": "IBR0fxYK4T8BZRKQ",
+  "tags": []
+}
